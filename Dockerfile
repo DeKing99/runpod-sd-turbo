@@ -1,23 +1,15 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.2.0-cudnn8-runtime-ubuntu22.04
 
-# Set environment vars to reduce warnings
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-# Install OS dependencies
+# Install Python and pip
 RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    ffmpeg \
-    libgl1 \
-    && rm -rf /var/lib/apt/lists/*
+    python3.10 python3-pip git && \
+    ln -s /usr/bin/python3.10 /usr/bin/python && \
+    pip install --upgrade pip
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
-
-# Copy app code
+WORKDIR /app
 COPY . .
 
-# Set the handler
-CMD ["python", "-m", "runpod.serverless.modules.rp_handler"]
+# Install Python deps
+RUN pip install -r requirements.txt
+
+CMD ["python", "handler.py"]
