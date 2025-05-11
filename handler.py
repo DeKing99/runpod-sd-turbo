@@ -1,23 +1,49 @@
-
 from runpod.serverless.modules.rp_handler import RunPodHandler
-from diffusers import DiffusionPipeline
 import torch
+from diffusers import StableDiffusionPipeline
+import os
 
-pipe = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-3.5-large-turbo",
-    torch_dtype=torch.float16,
-    variant="fp16"
-).to("cuda")
+pipe = None
+
+def init_pipeline():
+    global pipe
+    if pipe is None:
+        print("Loading Stable Diffusion v1.5 pipeline...")
+
+        pipe = StableDiffusionPipeline.from_pretrained(
+            "runwayml/stable-diffusion-v1-5",
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            use_safetensors=True,
+        )
+        pipe.to("cuda" if torch.cuda.is_available() else "cpu")
 
 def handler(event):
-    prompt = event["input"].get("prompt", "an astronaut cat")
-    width = event["input"].get("width", 1024)
-    height = event["input"].get("height", 1024)
-    steps = event["input"].get("num_inference_steps", 25)
-    guidance = event["input"].get("guidance_scale", 7.5)
+    init_pipeline()
 
-    image = pipe(prompt=prompt, width=width, height=height, num_inference_steps=steps, guidance_scale=guidance).images[0]
-    output_path = "/tmp/output.png"
-    image.save(output_path)
+    prompt = event.get("input", {}).get("prompt", "A futuristic cityscape")
+    negative_prompt = event.get("input", {}).get("negative_prompt", "")
+    width = event.get("input", {}).get("width", 512)
+    height = event.get("input", {}).get("height", 512)
+    guidance = event.get("input", {}).get("guidance_scale", 7.5)
+    steps = event.get("input", {}).get("num_inference_steps", 20)
 
-    return {"image": output_path}
+    print(f"Generating image: {prompt}")
+
+    result = pipe(
+        prompt,
+        negative_prompt=negative_prompt,
+        width=width,
+        height=height,
+        guidance_scale=guidance,
+        num_inference_steps=steps
+    )
+
+    image_path = "/tmp/generated_image.png"
+    result.images[0].save(image_path)
+
+    return {
+        "image_path": image_path,
+        "prompt": prompt
+    }
+
+handler = RunPodHandler(handler)
